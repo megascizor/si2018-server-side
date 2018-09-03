@@ -5,23 +5,32 @@ import (
 
 	"github.com/eure/si2018-server-side/repositories"
 	si "github.com/eure/si2018-server-side/restapi/summerintern"
+
+	"github.com/eure/si2018-server-side/entities"
 )
 
 func GetUsers(p si.GetUsersParams) middleware.Responder {
-	// ur := repositories.NewUserRepository()
-	// tr := repositories.NewUserTokenRepository()
-	//
-	// token_user, err := tr.GetByToken(p.Token)
-	//
-	// user, err := ur.GetByUserID(token.UserID)
-	//
-	// p.Limit = 20
-	// p.Offset = 0
-	//
-	// var ids []int64
-	// users, err := ur.FindWithCondition(p.Limit, p.Offset, user.Gender, ids)
-	//
-	return si.NewGetUsersOK()
+	lr := repositories.NewUserLikeRepository()
+	ur := repositories.NewUserRepository()
+
+	var ents entities.Users
+
+	// uEnt, err := ur.GetByToken(p.Token)
+	uEnt, _ := ur.GetByToken(p.Token)
+
+	// Add error handling for "UserRepository"
+
+	oppositeGender := uEnt.GetOppositeGender()
+	// exceptedIds, err := lr.FindLikeAll(uEnt.ID)
+	exceptedIds, _ := lr.FindLikeAll(uEnt.ID)
+
+	// Add error handling for "UserLikeRepository"
+
+	// ents, err = ur.FindWithCondition(int(p.Limit), int(p.Offset), oppositeGender, exceptedIds)
+	ents, _ = ur.FindWithCondition(int(p.Limit), int(p.Offset), oppositeGender, exceptedIds)
+
+	sEnt := ents.Build()
+	return si.NewGetUsersOK().WithPayload(sEnt)
 }
 
 func GetProfileByUserID(p si.GetProfileByUserIDParams) middleware.Responder {
