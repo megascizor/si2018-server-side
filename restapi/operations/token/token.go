@@ -30,5 +30,3 @@ func GetTokenByUserID(p si.GetTokenByUserIDParams) middleware.Responder {
 	sEnt := ent.Build()
 	return si.NewGetTokenByUserIDOK().WithPayload(&sEnt)
 }
-
-
