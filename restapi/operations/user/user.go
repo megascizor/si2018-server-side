@@ -1,12 +1,10 @@
 package user
 
 import (
-	"github.com/go-openapi/runtime/middleware"
-
+	"github.com/eure/si2018-server-side/entities"
 	"github.com/eure/si2018-server-side/repositories"
 	si "github.com/eure/si2018-server-side/restapi/summerintern"
-
-	"github.com/eure/si2018-server-side/entities"
+	"github.com/go-openapi/runtime/middleware"
 )
 
 func GetUsers(p si.GetUsersParams) middleware.Responder {
@@ -65,5 +63,24 @@ func GetProfileByUserID(p si.GetProfileByUserIDParams) middleware.Responder {
 }
 
 func PutProfile(p si.PutProfileParams) middleware.Responder {
-	return si.NewPutProfileOK()
+	r := repositories.NewUserRepository()
+
+	// ent, err := r.GetByUserID(p.UserID)
+	ent, _ := r.GetByUserID(p.UserID)
+
+	// Add error handling
+
+	ent.ApplyParams(p.Params)
+
+	err := r.Update(ent)
+	if err != nil {
+		return si.NewPutProfileInternalServerError().WithPayload(
+			&si.PutProfileInternalServerErrorBody{
+				Code:    "500",
+				Message: "Internal Server Error",
+			})
+	}
+
+	sEnt := ent.Build()
+	return si.NewPutProfileOK().WithPayload(&sEnt)
 }

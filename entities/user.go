@@ -2,6 +2,7 @@ package entities
 
 import (
 	"github.com/eure/si2018-server-side/models"
+	si "github.com/eure/si2018-server-side/restapi/summerintern"
 	"github.com/go-openapi/strfmt"
 )
 
@@ -34,6 +35,32 @@ type User struct {
 	UpdatedAt      strfmt.DateTime `xorm:"updated_at"`
 
 	ImageURI string `xorm:"-"`
+}
+
+func (u *User) ApplyParams(params si.PutProfileBody) {
+	u.AnnualIncome = params.AnnualIncome
+	u.BodyBuild = params.BodyBuild
+	u.Child = params.Child
+	u.CostOfDate = params.CostOfDate
+	u.Drinking = params.Drinking
+	u.Education = params.Education
+	u.Height = params.Height
+	u.Housework = params.Housework
+	u.Holiday = params.Holiday
+	u.HomeState = params.HomeState
+	u.Housework = params.Housework
+	u.HowToMeet = params.HowToMeet
+	u.ImageURI = params.ImageURI
+	u.Introduction = params.Introduction
+	u.Job = params.Job
+	u.MaritalStatus = params.MaritalStatus
+	u.Nickname = params.Nickname
+	u.NthChild = params.NthChild
+	u.ResidenceState = params.ResidenceState
+	u.Smoking = params.Smoking
+	u.Tweet = params.Tweet
+	u.WantChild = params.WantChild
+	u.WhenMarry = params.WhenMarry
 }
 
 func (u User) Build() models.User {
