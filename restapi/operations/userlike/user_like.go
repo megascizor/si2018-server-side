@@ -50,5 +50,7 @@ func GetLikes(p si.GetLikesParams) middleware.Responder {
 }
 
 func PostLike(p si.PostLikeParams) middleware.Responder {
+	// r := repositories.NewUserLikeRepository()
+
 	return si.NewPostLikeOK()
 }

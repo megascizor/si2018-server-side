@@ -8,24 +8,26 @@ import (
 )
 
 func PostMessage(p si.PostMessageParams) middleware.Responder {
-	// r := repositories.NewUserMessageRepository()
-	//
-	// err := r.Create()
-	//
-	// if err != nil {
-	// 	return si.NewPostMessageInternalServerError().WithPayload(
-	// 		&si.PostMessageInternalServerErrorBody{
-	// 			Code:    "500",
-	// 			Message: "Internal Server Error",
-	// 		})
-	// }
-	// if ent == nil {
-	// 	return si.NewPostMessageBadRequest().WithPayload(
-	// 		&si.PostMessageBadRequestBody{
-	// 			Code: "400",
-	// 			Message: "Bad Request",
-	// 		})
-	// }
+	r := repositories.NewUserMessageRepository()
+	ur := repositories.NewUserRepository()
+
+	sendUser, _ := ur.GetByToken(p.Params.Token)
+	/*
+	* Add error handling
+	 */
+
+	var ent = entities.UserMessage{}
+	ent.UserID = sendUser.ID
+	ent.PartnerID = p.UserID
+
+	err := r.Create(ent)
+	if err != nil {
+		return si.NewPostMessageInternalServerError().WithPayload(
+			&si.PostMessageInternalServerErrorBody{
+				Code:    "500",
+				Message: "Internal Server Error",
+			})
+	}
 
 	return si.NewPostMessageOK()
 }
@@ -36,12 +38,14 @@ func GetMessages(p si.GetMessagesParams) middleware.Responder {
 	ur := repositories.NewUserRepository()
 
 	uEnt, _ := ur.GetByToken(p.Token)
-
-	// Add error handling
+	/*
+	* Add error handling
+	 */
 
 	parentIDs, _ := mr.FindAllByUserID(uEnt.ID)
-
-	// Add error handling
+	/*
+	* Add error handling
+	 */
 
 	var ents entities.UserMessages
 	for _, parentID := range parentIDs {
