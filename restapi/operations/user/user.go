@@ -8,72 +8,178 @@ import (
 )
 
 func GetUsers(p si.GetUsersParams) middleware.Responder {
-	lr := repositories.NewUserLikeRepository()
-	ur := repositories.NewUserRepository()
+	// Repositories
+	repoUser := repositories.NewUserRepository()
+	repoUserLike := repositories.NewUserLikeRepository()
+	repoUserToken := repositories.NewUserTokenRepository()
 
-	var ents entities.Users
+	// Validation
+	entUserToken, errToken := repoUserToken.GetByToken(p.Token)
+	if errToken != nil {
+		return si.NewGetUsersUnauthorized().WithPayload(
+			&si.GetUsersUnauthorizedBody{
+				Code:    "500",
+				Message: "Unauthorized",
+			})
+	}
+	// if entUserToken == nil {
+	// 	return si.NewGetUsersBadRequest().WithPayload(
+	// 		&si.GetUsersBadRequestBody{
+	// 			Code:    "400",
+	// 			Message: "Bad Request : Token",
+	// 		})
+	// }
 
-	// uEnt, err := ur.GetByToken(p.Token)
-	uEnt, _ := ur.GetByToken(p.Token)
+	// Get User's entitie
+	entUser, errUser := repoUser.GetByUserID(entUserToken.UserID)
+	if errUser != nil {
+		return si.NewGetUsersInternalServerError().WithPayload(
+			&si.GetUsersInternalServerErrorBody{
+				Code:    "500",
+				Message: "Internal Server Error : User",
+			})
+	}
+	// if entUser == nil {
+	// 	return si.NewGetUsersBadRequest().WithPayload(
+	// 		&si.GetUsersBadRequestBody{
+	// 			Code:    "400",
+	// 			Message: "Bad Request : User",
+	// 		})
+	// }
 
-	// Add error handling for "UserRepository"
+	// Get excepted users
+	oppositeGender := entUser.GetOppositeGender()
+	exceptIDs, errLike := repoUserLike.FindLikeAll(entUser.ID)
+	if errLike != nil {
+		return si.NewGetLikesInternalServerError().WithPayload(
+			&si.GetLikesInternalServerErrorBody{
+				Code:    "500",
+				Message: "Internal Server Error : Like",
+			})
+	}
 
-	oppositeGender := uEnt.GetOppositeGender()
-	// exceptedIds, err := lr.FindLikeAll(uEnt.ID)
-	exceptedIds, _ := lr.FindLikeAll(uEnt.ID)
+	var entUsers entities.Users
+	entUsers, errUsers := repoUser.FindWithCondition(int(p.Limit), int(p.Offset), oppositeGender, exceptIDs)
+	if errUsers != nil {
+		return si.NewGetUsersInternalServerError().WithPayload(
+			&si.GetUsersInternalServerErrorBody{
+				Code:    "500",
+				Message: "Internal Server Error : Users",
+			})
+	}
+	// if entUsers == nil {
+	// 	return si.NewGetUsersBadRequest().WithPayload(
+	// 		&si.GetUsersBadRequestBody{
+	// 			Code:    "400",
+	// 			Message: "Bad Request : Users",
+	// 		})
+	// }
 
-	// Add error handling for "UserLikeRepository"
-
-	// ents, err = ur.FindWithCondition(int(p.Limit), int(p.Offset), oppositeGender, exceptedIds)
-	ents, _ = ur.FindWithCondition(int(p.Limit), int(p.Offset), oppositeGender, exceptedIds)
-
-	sEnt := ents.Build()
+	sEnt := entUsers.Build()
 	return si.NewGetUsersOK().WithPayload(sEnt)
 }
 
 func GetProfileByUserID(p si.GetProfileByUserIDParams) middleware.Responder {
-	r := repositories.NewUserRepository()
+	repoUser := repositories.NewUserRepository()
+	repoUserToken := repositories.NewUserTokenRepository()
 
-	ent, err := r.GetByUserID(p.UserID)
+	// Validation
+	entUserToken, errToken := repoUserToken.GetByUserID(p.UserID)
+	if errToken != nil {
+		return si.NewGetTokenByUserIDInternalServerError().WithPayload(
+			&si.GetTokenByUserIDInternalServerErrorBody{
+				Code:    "500",
+				Message: "Internal Server Error : Token",
+			})
+	}
+	if entUserToken == nil {
+		return si.NewGetTokenByUserIDNotFound().WithPayload(
+			&si.GetTokenByUserIDNotFoundBody{
+				Code:    "404",
+				Message: "User Token Not Found : Token",
+			})
+	}
 
-	if err != nil {
+	if p.Token != entUserToken.Token {
+		return si.NewGetProfileByUserIDUnauthorized().WithPayload(
+			&si.GetProfileByUserIDUnauthorizedBody{
+				Code:    "401",
+				Message: "Unauthorized : Token",
+			})
+	}
+
+	// Get profile
+	entUser, errUser := repoUser.GetByUserID(p.UserID)
+	if errUser != nil {
 		return si.NewGetProfileByUserIDInternalServerError().WithPayload(
 			&si.GetProfileByUserIDInternalServerErrorBody{
 				Code:    "500",
-				Message: "Internal Server Error",
+				Message: "Internal Server Error : Profile",
 			})
 	}
-	if ent == nil {
+	if entUser == nil {
 		return si.NewGetProfileByUserIDNotFound().WithPayload(
 			&si.GetProfileByUserIDNotFoundBody{
 				Code:    "404",
 				Message: "User Profile Not Found",
 			})
 	}
-	// if .Token != token.Token {
-	// 	return si.NewGetProfileByUserIDUnauthorized().WithPayload(
-	// 		&si.GetProfileByUserIDUnauthorizedBody{
-	// 			Code:    "401",
-	// 			Message: "Unauthorized",
-	// 		})
-	// }
 
-	sEnt := ent.Build()
+	sEnt := entUser.Build()
 	return si.NewGetProfileByUserIDOK().WithPayload(&sEnt)
 }
 
 func PutProfile(p si.PutProfileParams) middleware.Responder {
-	r := repositories.NewUserRepository()
+	repoUser := repositories.NewUserRepository()
+	repoUserToken := repositories.NewUserTokenRepository()
 
-	// ent, err := r.GetByUserID(p.UserID)
-	ent, _ := r.GetByUserID(p.UserID)
+	// Validation
+	entUserToken, errToken := repoUserToken.GetByUserID(p.UserID)
+	if errToken != nil {
+		return si.NewGetTokenByUserIDInternalServerError().WithPayload(
+			&si.GetTokenByUserIDInternalServerErrorBody{
+				Code:    "500",
+				Message: "Internal Server Error : Token",
+			})
+	}
+	if entUserToken == nil {
+		return si.NewGetTokenByUserIDNotFound().WithPayload(
+			&si.GetTokenByUserIDNotFoundBody{
+				Code:    "404",
+				Message: "User Token Not Found : Token",
+			})
+	}
 
-	// Add error handling
+	if p.Params.Token != entUserToken.Token {
+		return si.NewPutProfileUnauthorized().WithPayload(
+			&si.PutProfileUnauthorizedBody{
+				Code:    "401",
+				Message: "Unauthorized",
+			})
+	}
 
-	ent.ApplyParams(p.Params)
+	// Get user profile
+	entUser, errUser := repoUser.GetByUserID(p.UserID)
+	if errUser != nil {
+		return si.NewGetProfileByUserIDInternalServerError().WithPayload(
+			&si.GetProfileByUserIDInternalServerErrorBody{
+				Code:    "500",
+				Message: "Internal Server Error : User",
+			})
+	}
+	if entUser == nil {
+		return si.NewGetProfileByUserIDNotFound().WithPayload(
+			&si.GetProfileByUserIDNotFoundBody{
+				Code:    "404",
+				Message: "User Profile Not Found : User",
+			})
+	}
 
-	err := r.Update(ent)
-	if err != nil {
+	// Apply parameters
+	entUser.ApplyParams(p.Params)
+
+	errUpdate := repoUser.Update(entUser)
+	if errUpdate != nil {
 		return si.NewPutProfileInternalServerError().WithPayload(
 			&si.PutProfileInternalServerErrorBody{
 				Code:    "500",
@@ -81,6 +187,6 @@ func PutProfile(p si.PutProfileParams) middleware.Responder {
 			})
 	}
 
-	sEnt := ent.Build()
+	sEnt := entUser.Build()
 	return si.NewPutProfileOK().WithPayload(&sEnt)
 }
