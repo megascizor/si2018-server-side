@@ -16,21 +16,29 @@ func GetUsers(p si.GetUsersParams) middleware.Responder {
 	// Validation
 	entUserToken, errToken := repoUserToken.GetByToken(p.Token)
 	if errToken != nil {
+		return si.NewGetTokenByUserIDInternalServerError().WithPayload(
+			&si.GetTokenByUserIDInternalServerErrorBody{
+				Code:    "500",
+				Message: "Internal Server Error : Token",
+			})
+	}
+	if entUserToken == nil {
+		return si.NewGetTokenByUserIDNotFound().WithPayload(
+			&si.GetTokenByUserIDNotFoundBody{
+				Code:    "404",
+				Message: "User Not Found : Token",
+			})
+	}
+
+	if p.Token != entUserToken.Token {
 		return si.NewGetUsersUnauthorized().WithPayload(
 			&si.GetUsersUnauthorizedBody{
-				Code:    "500",
+				Code:    "401",
 				Message: "Unauthorized",
 			})
 	}
-	// if entUserToken == nil {
-	// 	return si.NewGetUsersBadRequest().WithPayload(
-	// 		&si.GetUsersBadRequestBody{
-	// 			Code:    "400",
-	// 			Message: "Bad Request : Token",
-	// 		})
-	// }
 
-	// Get User's entitie
+	// Get user's entitie
 	entUser, errUser := repoUser.GetByUserID(entUserToken.UserID)
 	if errUser != nil {
 		return si.NewGetUsersInternalServerError().WithPayload(
@@ -39,13 +47,13 @@ func GetUsers(p si.GetUsersParams) middleware.Responder {
 				Message: "Internal Server Error : User",
 			})
 	}
-	// if entUser == nil {
-	// 	return si.NewGetUsersBadRequest().WithPayload(
-	// 		&si.GetUsersBadRequestBody{
-	// 			Code:    "400",
-	// 			Message: "Bad Request : User",
-	// 		})
-	// }
+	if entUser == nil {
+		return si.NewGetUsersBadRequest().WithPayload(
+			&si.GetUsersBadRequestBody{
+				Code:    "400",
+				Message: "Bad Request : User",
+			})
+	}
 
 	// Get excepted users
 	oppositeGender := entUser.GetOppositeGender()
@@ -67,19 +75,13 @@ func GetUsers(p si.GetUsersParams) middleware.Responder {
 				Message: "Internal Server Error : Users",
 			})
 	}
-	// if entUsers == nil {
-	// 	return si.NewGetUsersBadRequest().WithPayload(
-	// 		&si.GetUsersBadRequestBody{
-	// 			Code:    "400",
-	// 			Message: "Bad Request : Users",
-	// 		})
-	// }
 
 	sEnt := entUsers.Build()
 	return si.NewGetUsersOK().WithPayload(sEnt)
 }
 
 func GetProfileByUserID(p si.GetProfileByUserIDParams) middleware.Responder {
+	// Repositories
 	repoUser := repositories.NewUserRepository()
 	repoUserToken := repositories.NewUserTokenRepository()
 
@@ -96,7 +98,7 @@ func GetProfileByUserID(p si.GetProfileByUserIDParams) middleware.Responder {
 		return si.NewGetTokenByUserIDNotFound().WithPayload(
 			&si.GetTokenByUserIDNotFoundBody{
 				Code:    "404",
-				Message: "User Token Not Found : Token",
+				Message: "User Not Found : Token",
 			})
 	}
 
@@ -104,7 +106,7 @@ func GetProfileByUserID(p si.GetProfileByUserIDParams) middleware.Responder {
 		return si.NewGetProfileByUserIDUnauthorized().WithPayload(
 			&si.GetProfileByUserIDUnauthorizedBody{
 				Code:    "401",
-				Message: "Unauthorized : Token",
+				Message: "Unauthorized",
 			})
 	}
 
@@ -114,14 +116,22 @@ func GetProfileByUserID(p si.GetProfileByUserIDParams) middleware.Responder {
 		return si.NewGetProfileByUserIDInternalServerError().WithPayload(
 			&si.GetProfileByUserIDInternalServerErrorBody{
 				Code:    "500",
-				Message: "Internal Server Error : Profile",
+				Message: "Internal Server Error : User",
 			})
 	}
 	if entUser == nil {
 		return si.NewGetProfileByUserIDNotFound().WithPayload(
 			&si.GetProfileByUserIDNotFoundBody{
 				Code:    "404",
-				Message: "User Profile Not Found",
+				Message: "User Not Found : User",
+			})
+	}
+	/* Need Bad Request? */
+	if p.UserID != entUser.ID {
+		return si.NewGetProfileByUserIDBadRequest().WithPayload(
+			&si.GetProfileByUserIDBadRequestBody{
+				Code:    "400",
+				Message: "Bad Request : User",
 			})
 	}
 
@@ -130,6 +140,7 @@ func GetProfileByUserID(p si.GetProfileByUserIDParams) middleware.Responder {
 }
 
 func PutProfile(p si.PutProfileParams) middleware.Responder {
+	// Repositories
 	repoUser := repositories.NewUserRepository()
 	repoUserToken := repositories.NewUserTokenRepository()
 
@@ -146,7 +157,7 @@ func PutProfile(p si.PutProfileParams) middleware.Responder {
 		return si.NewGetTokenByUserIDNotFound().WithPayload(
 			&si.GetTokenByUserIDNotFoundBody{
 				Code:    "404",
-				Message: "User Token Not Found : Token",
+				Message: "User Not Found : Token",
 			})
 	}
 
@@ -161,17 +172,24 @@ func PutProfile(p si.PutProfileParams) middleware.Responder {
 	// Get user profile
 	entUser, errUser := repoUser.GetByUserID(p.UserID)
 	if errUser != nil {
-		return si.NewGetProfileByUserIDInternalServerError().WithPayload(
-			&si.GetProfileByUserIDInternalServerErrorBody{
+		return si.NewPutProfileInternalServerError().WithPayload(
+			&si.PutProfileInternalServerErrorBody{
 				Code:    "500",
 				Message: "Internal Server Error : User",
 			})
 	}
+	if p.UserID != entUserToken.UserID {
+		return si.NewPutProfileForbidden().WithPayload(
+			&si.PutProfileForbiddenBody{
+				Code:    "403",
+				Message: "Forbidden",
+			})
+	}
 	if entUser == nil {
-		return si.NewGetProfileByUserIDNotFound().WithPayload(
-			&si.GetProfileByUserIDNotFoundBody{
-				Code:    "404",
-				Message: "User Profile Not Found : User",
+		return si.NewPutProfileBadRequest().WithPayload(
+			&si.PutProfileBadRequestBody{
+				Code:    "400",
+				Message: "Bad Request : User",
 			})
 	}
 
@@ -183,7 +201,7 @@ func PutProfile(p si.PutProfileParams) middleware.Responder {
 		return si.NewPutProfileInternalServerError().WithPayload(
 			&si.PutProfileInternalServerErrorBody{
 				Code:    "500",
-				Message: "Internal Server Error",
+				Message: "Internal Server Error : put profile",
 			})
 	}
 
