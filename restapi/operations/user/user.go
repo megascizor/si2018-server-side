@@ -58,12 +58,12 @@ func GetUsers(p si.GetUsersParams) middleware.Responder {
 		return si.NewGetUsersBadRequest().WithPayload(
 			&si.GetUsersBadRequestBody{
 				Code:    "400",
-				Message: "Bad Request: 'GetBuToken' failed: " + err.Error(),
+				Message: "Bad Request: 'GetByUserID' failed: " + err.Error(),
 			})
 	}
 
-	// Get except user IDs
-	exceptIDs, err := repoUserLike.FindLikeAll(entUser.ID)
+	// Get except user IDs (Users I liked)
+	exceptIDs, err := repoUserLike.FindIDsILiked(entUser.ID)
 	if err != nil {
 		return si.NewGetUsersInternalServerError().WithPayload(
 			&si.GetUsersInternalServerErrorBody{
@@ -129,10 +129,10 @@ func GetProfileByUserID(p si.GetProfileByUserIDParams) middleware.Responder {
 			})
 	}
 	if lookUser == nil {
-		return si.NewGetProfileByUserIDBadRequest().WithPayload(
-			&si.GetProfileByUserIDBadRequestBody{
-				Code:    "400",
-				Message: "Bad Request: 'GetByUserID' failed: " + err.Error(),
+		return si.NewGetProfileByUserIDNotFound().WithPayload(
+			&si.GetProfileByUserIDNotFoundBody{
+				Code:    "404",
+				Message: "User Not Found",
 			})
 	}
 	if lookedUser == nil {
@@ -144,7 +144,8 @@ func GetProfileByUserID(p si.GetProfileByUserIDParams) middleware.Responder {
 	}
 
 	// Check whether look and looked user is the same-gender
-	if lookUser.Gender == lookedUser.Gender {
+	// You can see your profile.
+	if lookUser.Gender == lookedUser.Gender && lookUser.ID != lookedUser.ID {
 		return si.NewGetProfileByUserIDBadRequest().WithPayload(
 			&si.GetProfileByUserIDBadRequestBody{
 				Code:    "400",
@@ -214,6 +215,23 @@ func PutProfile(p si.PutProfileParams) middleware.Responder {
 			})
 	}
 
-	sEnt := entUser.Build()
+	// Get updated profile
+	entUpdatedUser, err := repoUser.GetByUserID(p.UserID)
+	if err != nil {
+		return si.NewPutProfileInternalServerError().WithPayload(
+			&si.PutProfileInternalServerErrorBody{
+				Code:    "500",
+				Message: "Internal Server Error",
+			})
+	}
+	if entUpdatedUser == nil {
+		return si.NewPutProfileBadRequest().WithPayload(
+			&si.PutProfileBadRequestBody{
+				Code:    "400",
+				Message: "Bad Request: 'GetByUserID' (after update) failed: " + err.Error(),
+			})
+	}
+
+	sEnt := entUpdatedUser.Build()
 	return si.NewPutProfileOK().WithPayload(&sEnt)
 }
