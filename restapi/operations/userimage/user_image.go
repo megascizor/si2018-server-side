@@ -20,17 +20,16 @@ import (
 )
 
 func PostImage(p si.PostImagesParams) middleware.Responder {
-	// Repositories
 	repoUserImage := repositories.NewUserImageRepository()
 	repoUserToken := repositories.NewUserTokenRepository()
 
 	// Validation
-	entUserToken, errToken := repoUserToken.GetByToken(p.Params.Token)
-	if errToken != nil {
+	entUserToken, err := repoUserToken.GetByToken(p.Params.Token)
+	if err != nil {
 		return si.NewPostImagesInternalServerError().WithPayload(
 			&si.PostImagesInternalServerErrorBody{
 				Code:    "500",
-				Message: "Internal Server Error: 'GetByToken' (UserToken) failed: " + errToken.Error(),
+				Message: "Internal Server Error",
 			})
 	}
 	if entUserToken == nil {
@@ -51,14 +50,7 @@ func PostImage(p si.PostImagesParams) middleware.Responder {
 				Message: "Internal Server Error: 'image.DecodeConfig' failed: " + err.Error(),
 			})
 	}
-	switch format {
-	case "jpg":
-		format = ".jpg"
-	case "png":
-		format = ".png"
-	case "gif":
-		format = ".gif"
-	default:
+	if format != "jpeg" && format != "png" && format != "gif" {
 		return si.NewPostImagesBadRequest().WithPayload(
 			&si.PostImagesBadRequestBody{
 				Code:    "400",
@@ -72,9 +64,8 @@ func PostImage(p si.PostImagesParams) middleware.Responder {
 	strUserID := strconv.Itoa(int(userID))
 	// updatedTime := time.Now()
 	// strUpdatedTime := updatedTime.String()
-	fileName := strings.Join([]string{"icon", strUserID}, "_") + format
+	fileName := strings.Join([]string{"icon", strUserID}, "_") + "." + format
 	filePath := path.Join(assetsPath, fileName)
-	println(filePath)
 
 	// Create file
 	f, err := os.Create(filePath)
