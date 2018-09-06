@@ -1,15 +1,15 @@
 package userlike
 
 import (
-	"github.com/go-openapi/runtime/middleware"
-
 	"github.com/eure/si2018-server-side/entities"
 	"github.com/eure/si2018-server-side/repositories"
 	si "github.com/eure/si2018-server-side/restapi/summerintern"
+	"github.com/go-openapi/runtime/middleware"
 	strfmt "github.com/go-openapi/strfmt"
 	"time"
 )
 
+// GetLikes get likes
 func GetLikes(p si.GetLikesParams) middleware.Responder {
 	repoUser := repositories.NewUserRepository()
 	repoUserLike := repositories.NewUserLikeRepository()
@@ -17,23 +17,30 @@ func GetLikes(p si.GetLikesParams) middleware.Responder {
 	repoUserToken := repositories.NewUserTokenRepository()
 
 	// Validation
-	entUserToken, errToken := repoUserToken.GetByToken(p.Token)
-	if errToken != nil {
-		return si.NewGetTokenByUserIDInternalServerError().WithPayload(
-			&si.GetTokenByUserIDInternalServerErrorBody{
-				Code:    "500",
-				Message: "Internal Server Error : Token",
+	if p.Limit < 0 {
+		return si.NewGetLikesInternalServerError().WithPayload(
+			&si.GetLikesInternalServerErrorBody{
+				Code:    "400",
+				Message: "Bad Request: limit in query must be not less than 1",
 			})
 	}
-	if entUserToken == nil {
-		return si.NewGetTokenByUserIDNotFound().WithPayload(
-			&si.GetTokenByUserIDNotFoundBody{
-				Code:    "404",
-				Message: "User Token Not Found",
+	if p.Offset < 0 {
+		return si.NewGetLikesBadRequest().WithPayload(
+			&si.GetLikesBadRequestBody{
+				Code:    "400",
+				Message: "Bad Request: offset in query must be not less than 1",
 			})
 	}
 
-	if p.Token != entUserToken.Token {
+	entUserToken, err := repoUserToken.GetByToken(p.Token)
+	if err != nil {
+		return si.NewGetLikesInternalServerError().WithPayload(
+			&si.GetLikesInternalServerErrorBody{
+				Code:    "500",
+				Message: "Internal Server Error",
+			})
+	}
+	if entUserToken == nil {
 		return si.NewGetLikesUnauthorized().WithPayload(
 			&si.GetLikesUnauthorizedBody{
 				Code:    "401",
@@ -41,58 +48,44 @@ func GetLikes(p si.GetLikesParams) middleware.Responder {
 			})
 	}
 
-	// Get user's entitie
-	// entUser, errUser := repoUser.GetByUserID(entUserToken.UserID)
-	// if errUser != nil {
-	// 	return si.NewGetUsersInternalServerError().WithPayload(
-	// 		&si.GetUsersInternalServerErrorBody{
-	// 			Code:    "500",
-	// 			Message: "Internal Server Error : User",
-	// 		})
-	// }
-	// if entUser == nil {
-	// 	return si.NewGetUsersBadRequest().WithPayload(
-	// 		&si.GetUsersBadRequestBody{
-	// 			Code:    "400",
-	// 			Message: "Bad Request : User",
-	// 		})
-	// }
-
-	// Get excepted users
-	exceptIDs, errMatch := repoUserMatch.FindAllByUserID(entUserToken.UserID)
-	if errMatch != nil {
-		return si.NewGetMatchesInternalServerError().WithPayload(
-			&si.GetMatchesInternalServerErrorBody{
-				Code:    "500",
-				Message: "Internal Server Error : Match",
-			})
-	}
-
-	entUserLikes, errLikes := repoUserLike.FindGotLikeWithLimitOffset(entUserToken.UserID, int(p.Limit), int(p.Offset), exceptIDs)
-	if errLikes != nil {
+	// Get excepted users (matched users)
+	userID := entUserToken.UserID
+	exceptIDs, err := repoUserMatch.FindAllByUserID(userID)
+	if err != nil {
 		return si.NewGetLikesInternalServerError().WithPayload(
 			&si.GetLikesInternalServerErrorBody{
 				Code:    "500",
-				Message: "Internal Server Error : Likes",
+				Message: "Internal Server Error",
 			})
 	}
 
+	// Get likes
+	entUserLikes, err := repoUserLike.FindGotLikeWithLimitOffset(userID, int(p.Limit), int(p.Offset), exceptIDs)
+	if err != nil {
+		return si.NewGetLikesInternalServerError().WithPayload(
+			&si.GetLikesInternalServerErrorBody{
+				Code:    "500",
+				Message: "Internal Server Error",
+			})
+	}
+
+	// Converte UserLikes -> LikeUserResponses
 	var entLikeUserResponses entities.LikeUserResponses
 	for _, entUserLike := range entUserLikes {
 		var res entities.LikeUserResponse
-		entUser, errUser := repoUser.GetByUserID(entUserLike.UserID)
-		if errUser != nil {
-			return si.NewGetUsersInternalServerError().WithPayload(
-				&si.GetUsersInternalServerErrorBody{
+		entUser, err := repoUser.GetByUserID(entUserLike.UserID)
+		if err != nil {
+			return si.NewGetLikesInternalServerError().WithPayload(
+				&si.GetLikesInternalServerErrorBody{
 					Code:    "500",
-					Message: "Internal Server Error : User (for)",
+					Message: "Internal Server Error",
 				})
 		}
 		if entUser == nil {
 			return si.NewGetUsersBadRequest().WithPayload(
 				&si.GetUsersBadRequestBody{
 					Code:    "500",
-					Message: "Bad Request : User (for)",
+					Message: "Bad Request: 'GetByUserID' failed: " + err.Error(),
 				})
 		}
 		res.ApplyUser(*entUser)
@@ -103,31 +96,90 @@ func GetLikes(p si.GetLikesParams) middleware.Responder {
 	return si.NewGetLikesOK().WithPayload(sEnt)
 }
 
+// PostLike post like
 func PostLike(p si.PostLikeParams) middleware.Responder {
-	// Repositories
 	repoUser := repositories.NewUserRepository()
 	repoUserLike := repositories.NewUserLikeRepository()
 	repoUserMatch := repositories.NewUserMatchRepository()
+	repoUserToken := repositories.NewUserTokenRepository()
 
-	/* Todo: Add error handling */
-	sendUser, _ := repoUser.GetByToken(p.Params.Token)
-	recvUser, _ := repoUser.GetByUserID(p.UserID)
-	/* ------------------------ */
-
-	sendID := sendUser.ID
-	recvID := p.UserID
-
-	// Check whether same-gender
-	if sendUser.Gender == recvUser.Gender {
-		return si.NewPostLikeBadRequest().WithPayload(
-			&si.PostLikeBadRequestBody{
-				Code:    "404",
-				Message: "Bad Request : Gender is the same",
+	// Validation
+	entUserToken, err := repoUserToken.GetByToken(p.Params.Token)
+	if err != nil {
+		return si.NewPostLikeInternalServerError().WithPayload(
+			&si.PostLikeInternalServerErrorBody{
+				Code:    "500",
+				Message: "Internal Server Error",
+			})
+	}
+	if entUserToken == nil {
+		return si.NewPostLikeUnauthorized().WithPayload(
+			&si.PostLikeUnauthorizedBody{
+				Code:    "500",
+				Message: "Unauthorized",
 			})
 	}
 
-	// Two times "like" error handling to the same person
-	exceptIDs, _ := repoUserLike.FindLikedIDs(sendID)
+	// Get users (sender and receiver)
+	sendUser, err := repoUser.GetByUserID(entUserToken.UserID)
+	if err != nil {
+		return si.NewPostLikeInternalServerError().WithPayload(
+			&si.PostLikeInternalServerErrorBody{
+				Code:    "500",
+				Message: "Internal Server Error",
+			})
+	}
+	if sendUser == nil {
+		return si.NewPostLikeBadRequest().WithPayload(
+			&si.PostLikeBadRequestBody{
+				Code:    "400",
+				Message: "Bad Request: 'GetByUserID' (sender) failed: " + err.Error(),
+			})
+	}
+
+	recvUser, err := repoUser.GetByUserID(p.UserID)
+	if err != nil {
+		return si.NewPostLikeInternalServerError().WithPayload(
+			&si.PostLikeInternalServerErrorBody{
+				Code:    "500",
+				Message: "Internal Server Error",
+			})
+	}
+	if recvUser == nil {
+		return si.NewPostLikeBadRequest().WithPayload(
+			&si.PostLikeBadRequestBody{
+				Code:    "400",
+				Message: "Bad Request: 'GetByUserID' (receiver) failed: " + err.Error(),
+			})
+	}
+
+	// Check whether a sender do "like" to hisself
+	if sendUser.ID == recvUser.ID {
+		return si.NewPostLikeBadRequest().WithPayload(
+			&si.PostLikeBadRequestBody{
+				Code:    "400",
+				Message: "Bad Request: must not do 'like' for myself",
+			})
+	}
+
+	// Check whether a sender do "like" to the same-gender person
+	if sendUser.Gender == recvUser.Gender {
+		return si.NewPostLikeBadRequest().WithPayload(
+			&si.PostLikeBadRequestBody{
+				Code:    "400",
+				Message: "Bad Request: must not do 'like' to the same-gender",
+			})
+	}
+
+	// Check whether a sender do two times "like" to the same person
+	exceptIDs, err := repoUserLike.FindLikedIDs(sendUser.ID)
+	if err != nil {
+		return si.NewPostLikeInternalServerError().WithPayload(
+			&si.PostLikeInternalServerErrorBody{
+				Code:    "500",
+				Message: "Internal Server Error",
+			})
+	}
 	for _, exceptID := range exceptIDs {
 		if recvUser.ID == exceptID {
 			return si.NewPostLikeBadRequest().WithPayload(
@@ -138,15 +190,15 @@ func PostLike(p si.PostLikeParams) middleware.Responder {
 		}
 	}
 
-	// Initialize
+	// Apply parameters (for "like")
 	var entUserLike entities.UserLike
-	entUserLike.UserID = sendID
-	entUserLike.PartnerID = recvID
+	entUserLike.UserID = sendUser.ID
+	entUserLike.PartnerID = recvUser.ID
 	entUserLike.CreatedAt = strfmt.DateTime(time.Now())
 	entUserLike.UpdatedAt = entUserLike.CreatedAt
 
 	// Do "like"
-	err := repoUserLike.Create(entUserLike)
+	err = repoUserLike.Create(entUserLike)
 	if err != nil {
 		return si.NewPostLikeInternalServerError().WithPayload(
 			&si.PostLikeInternalServerErrorBody{
@@ -156,10 +208,17 @@ func PostLike(p si.PostLikeParams) middleware.Responder {
 	}
 
 	// Make matching when they have done "like" each other
-	likedIDs, _ := repoUserLike.FindLikedIDs(recvID)
+	likedIDs, err := repoUserLike.FindLikedIDs(recvUser.ID)
+	if err != nil {
+		return si.NewPostLikeInternalServerError().WithPayload(
+			&si.PostLikeInternalServerErrorBody{
+				Code:    "500",
+				Message: "Internal Server Error",
+			})
+	}
 	for _, likedID := range likedIDs {
-		if sendID == likedID {
-			// Initialize
+		if sendUser.ID == likedID {
+			// Apply parameters (for matching)
 			var entUserMatch entities.UserMatch
 			entUserMatch.UserID = entUserLike.PartnerID
 			entUserMatch.PartnerID = entUserLike.UserID
@@ -167,7 +226,7 @@ func PostLike(p si.PostLikeParams) middleware.Responder {
 			entUserMatch.UpdatedAt = entUserMatch.CreatedAt
 
 			// Matching
-			err := repoUserMatch.Create(entUserMatch)
+			err = repoUserMatch.Create(entUserMatch)
 			if err != nil {
 				return si.NewPostLikeInternalServerError().WithPayload(
 					&si.PostLikeInternalServerErrorBody{
