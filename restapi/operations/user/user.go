@@ -14,11 +14,11 @@ func GetUsers(p si.GetUsersParams) middleware.Responder {
 	repoUserToken := repositories.NewUserTokenRepository()
 
 	// Validation
-	if p.Limit < 0 {
+	if p.Limit <= 0 {
 		return si.NewGetUsersBadRequest().WithPayload(
 			&si.GetUsersBadRequestBody{
 				Code:    "400",
-				Message: "Bad Request: limit in query must be not less than 1",
+				Message: "Bad Request: limit in query must be more than 1",
 			})
 	}
 	if p.Offset < 0 {
@@ -45,8 +45,8 @@ func GetUsers(p si.GetUsersParams) middleware.Responder {
 			})
 	}
 
-	// Get user from token
-	entUser, err := repoUser.GetByToken(p.Token)
+	// Get user
+	entUser, err := repoUser.GetByUserID(entUserToken.UserID)
 	if err != nil {
 		return si.NewGetUsersInternalServerError().WithPayload(
 			&si.GetUsersInternalServerErrorBody{
