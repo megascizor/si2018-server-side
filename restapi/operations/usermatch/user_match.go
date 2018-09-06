@@ -8,29 +8,35 @@ import (
 )
 
 func GetMatches(p si.GetMatchesParams) middleware.Responder {
-	// Repositories
 	repoUser := repositories.NewUserRepository()
 	repoUserMatch := repositories.NewUserMatchRepository()
 	repoUserToken := repositories.NewUserTokenRepository()
 
 	// Validation
-	entUserToken, errToken := repoUserToken.GetByToken(p.Token)
-	if errToken != nil {
-		return si.NewGetTokenByUserIDInternalServerError().WithPayload(
-			&si.GetTokenByUserIDInternalServerErrorBody{
-				Code:    "500",
-				Message: "Internal Server Error : Token",
+	if p.Limit <= 0 {
+		return si.NewGetMatchesBadRequest().WithPayload(
+			&si.GetMatchesBadRequestBody{
+				Code:    "400",
+				Message: "Bad Request: limit in query must be not less than 1",
 			})
 	}
-	if entUserToken == nil {
-		return si.NewGetTokenByUserIDNotFound().WithPayload(
-			&si.GetTokenByUserIDNotFoundBody{
-				Code:    "404",
-				Message: "User Token Not Found",
+	if p.Offset < 0 {
+		return si.NewGetMatchesBadRequest().WithPayload(
+			&si.GetMatchesBadRequestBody{
+				Code:    "400",
+				Message: "Bad Request: offset in query must be not less than 1",
 			})
 	}
 
-	if p.Token != entUserToken.Token {
+	entUserToken, err := repoUserToken.GetByToken(p.Token)
+	if err != nil {
+		return si.NewGetMatchesInternalServerError().WithPayload(
+			&si.GetMatchesInternalServerErrorBody{
+				Code:    "500",
+				Message: "Internal Server Error",
+			})
+	}
+	if entUserToken == nil {
 		return si.NewGetMatchesUnauthorized().WithPayload(
 			&si.GetMatchesUnauthorizedBody{
 				Code:    "401",
@@ -39,8 +45,8 @@ func GetMatches(p si.GetMatchesParams) middleware.Responder {
 	}
 
 	// Get matches
-	entUserMatches, errUserMatches := repoUserMatch.FindByUserIDWithLimitOffset(entUserToken.UserID, int(p.Limit), int(p.Offset))
-	if errUserMatches != nil {
+	entUserMatches, err := repoUserMatch.FindByUserIDWithLimitOffset(entUserToken.UserID, int(p.Limit), int(p.Offset))
+	if err != nil {
 		return si.NewGetMatchesInternalServerError().WithPayload(
 			&si.GetMatchesInternalServerErrorBody{
 				Code:    "500",
@@ -59,19 +65,19 @@ func GetMatches(p si.GetMatchesParams) middleware.Responder {
 			partnerID = entUserMatch.UserID
 		}
 
-		entUser, errUser := repoUser.GetByUserID(partnerID)
-		if errUser != nil {
-			return si.NewGetUsersInternalServerError().WithPayload(
-				&si.GetUsersInternalServerErrorBody{
+		entUser, err := repoUser.GetByUserID(partnerID)
+		if err != nil {
+			return si.NewGetMatchesInternalServerError().WithPayload(
+				&si.GetMatchesInternalServerErrorBody{
 					Code:    "500",
-					Message: "Internal Server Error : User (for)",
+					Message: "Internal Server Error",
 				})
 		}
 		if entUser == nil {
-			return si.NewGetUsersBadRequest().WithPayload(
-				&si.GetUsersBadRequestBody{
-					Code:    "500",
-					Message: "Bad Request : User (for)",
+			return si.NewGetMatchesBadRequest().WithPayload(
+				&si.GetMatchesBadRequestBody{
+					Code:    "400",
+					Message: "Bad Request: 'GetByUserID' failed: " + err.Error(),
 				})
 		}
 		res.ApplyUser(*entUser)
@@ -79,22 +85,5 @@ func GetMatches(p si.GetMatchesParams) middleware.Responder {
 	}
 
 	sEnt := entMatchUserResponses.Build()
-
-	// uEnt, _ := ur.GetByToken(p.Token)
-	//
-	// mlEnts, _ := mr.FindByUserIDWithLimitOffset(uEnt.ID, int(p.Limit), int(p.Offset))
-	// var ents entities.MatchUserResponses
-	// for _, matchUser := range mlEnts {
-	// 	var res = entities.MatchUserResponse{}
-	// 	// user, err := ur.GetByUserID(matchUser.UserID)
-	//
-	// 	// Add error handler
-	//
-	// 	user, _ := ur.GetByUserID(matchUser.UserID)
-	// 	res.ApplyUser(*user)
-	// 	ents = append(ents, res)
-	// }
-	//
-	// sEnt := ents.Build()
 	return si.NewGetMatchesOK().WithPayload(sEnt)
 }
