@@ -71,3 +71,20 @@ func (r *UserLikeRepository) FindGotLikeWithLimitOffset(userID int64, limit, off
 
 	return likes, nil
 }
+
+// 自分がいいねした相手のIDを返す
+func (r *UserLikeRepository) FindIDsILiked(userID int64) ([]int64, error) {
+	var likes entities.UserLikes
+	var ids []int64
+
+	err := engine.Where("user_id = ?", userID).Find(&likes)
+	if err != nil {
+		return ids, err
+	}
+
+	for _, like := range likes {
+		ids = append(ids, like.PartnerID)
+	}
+
+	return ids, nil
+}

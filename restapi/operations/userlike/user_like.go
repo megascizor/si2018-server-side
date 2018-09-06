@@ -4,6 +4,7 @@ import (
 	"github.com/eure/si2018-server-side/entities"
 	"github.com/eure/si2018-server-side/repositories"
 	si "github.com/eure/si2018-server-side/restapi/summerintern"
+	"github.com/eure/si2018-server-side/restapi/utils"
 	"github.com/go-openapi/runtime/middleware"
 	strfmt "github.com/go-openapi/strfmt"
 	"time"
@@ -17,7 +18,7 @@ func GetLikes(p si.GetLikesParams) middleware.Responder {
 	repoUserToken := repositories.NewUserTokenRepository()
 
 	// Validation
-	if p.Limit < 0 {
+	if p.Limit <= 0 {
 		return si.NewGetLikesInternalServerError().WithPayload(
 			&si.GetLikesInternalServerErrorBody{
 				Code:    "400",
@@ -153,8 +154,11 @@ func PostLike(p si.PostLikeParams) middleware.Responder {
 			})
 	}
 
+	sendID := sendUser.ID
+	recvID := recvUser.ID
+
 	// Check whether a sender do "like" to hisself
-	if sendUser.ID == recvUser.ID {
+	if sendID == recvID {
 		return si.NewPostLikeBadRequest().WithPayload(
 			&si.PostLikeBadRequestBody{
 				Code:    "400",
@@ -172,7 +176,7 @@ func PostLike(p si.PostLikeParams) middleware.Responder {
 	}
 
 	// Check whether a sender do two times "like" to the same person
-	exceptIDs, err := repoUserLike.FindLikedIDs(sendUser.ID)
+	exceptIDs, err := repoUserLike.FindIDsILiked(sendID)
 	if err != nil {
 		return si.NewPostLikeInternalServerError().WithPayload(
 			&si.PostLikeInternalServerErrorBody{
@@ -180,20 +184,27 @@ func PostLike(p si.PostLikeParams) middleware.Responder {
 				Message: "Internal Server Error",
 			})
 	}
-	for _, exceptID := range exceptIDs {
-		if recvUser.ID == exceptID {
-			return si.NewPostLikeBadRequest().WithPayload(
-				&si.PostLikeBadRequestBody{
-					Code:    "404",
-					Message: "Bad Request : Already did 'like'",
-				})
-		}
+	if utils.IsContained(recvID, exceptIDs) {
+		return si.NewPostLikeBadRequest().WithPayload(
+			&si.PostLikeBadRequestBody{
+				Code:    "400",
+				Message: "Bad Request: already did 'like'",
+			})
 	}
+	// for _, exceptID := range exceptIDs {
+	// 	if recvID == exceptID {
+	// 		return si.NewPostLikeBadRequest().WithPayload(
+	// 			&si.PostLikeBadRequestBody{
+	// 				Code:    "404",
+	// 				Message: "Bad Request : Already did 'like'",
+	// 			})
+	// 	}
+	// }
 
 	// Apply parameters (for "like")
 	var entUserLike entities.UserLike
-	entUserLike.UserID = sendUser.ID
-	entUserLike.PartnerID = recvUser.ID
+	entUserLike.UserID = sendID
+	entUserLike.PartnerID = recvID
 	entUserLike.CreatedAt = strfmt.DateTime(time.Now())
 	entUserLike.UpdatedAt = entUserLike.CreatedAt
 
@@ -208,7 +219,7 @@ func PostLike(p si.PostLikeParams) middleware.Responder {
 	}
 
 	// Make matching when they have done "like" each other
-	likedIDs, err := repoUserLike.FindLikedIDs(recvUser.ID)
+	likedIDs, err := repoUserLike.FindIDsILiked(recvID)
 	if err != nil {
 		return si.NewPostLikeInternalServerError().WithPayload(
 			&si.PostLikeInternalServerErrorBody{
@@ -217,7 +228,7 @@ func PostLike(p si.PostLikeParams) middleware.Responder {
 			})
 	}
 	for _, likedID := range likedIDs {
-		if sendUser.ID == likedID {
+		if sendID == likedID {
 			// Apply parameters (for matching)
 			var entUserMatch entities.UserMatch
 			entUserMatch.UserID = entUserLike.PartnerID
