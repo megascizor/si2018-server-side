@@ -44,6 +44,7 @@ func (res LikeUserResponse) Build() models.LikeUserResponse {
 }
 
 func (res *LikeUserResponse) ApplyUser(u User) {
+	res.LikedAt = u.CreatedAt
 	res.ID = u.ID
 	res.Gender = u.Gender
 	res.Birthday = u.Birthday
