@@ -106,7 +106,7 @@ func GetLikes(p si.GetLikesParams) middleware.Responder {
 				})
 		}
 
-		// Get image URI
+		// Input image URI
 		for _, entUserImage := range entUserImages {
 			if entUser.ID == entUserImage.UserID {
 				entUser.ImageURI = entUserImage.Path
