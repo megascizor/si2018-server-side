@@ -47,7 +47,7 @@ func PostImage(p si.PostImagesParams) middleware.Responder {
 		si.NewPostImagesInternalServerError().WithPayload(
 			&si.PostImagesInternalServerErrorBody{
 				Code:    "500",
-				Message: "Internal Server Error: 'image.DecodeConfig' failed: " + err.Error(),
+				Message: "Internal Server Error: 'image.DecodeConfig' failed",
 			})
 	}
 	if format != "jpeg" && format != "png" && format != "gif" {
@@ -73,7 +73,7 @@ func PostImage(p si.PostImagesParams) middleware.Responder {
 		return si.NewPostImagesInternalServerError().WithPayload(
 			&si.PostImagesInternalServerErrorBody{
 				Code:    "500",
-				Message: "Internal Server Error: 'os.Create' failed: " + err.Error(),
+				Message: "Internal Server Error: 'os.Create' failed",
 			})
 	}
 	defer f.Close()
