@@ -13,6 +13,7 @@ import (
 // GetLikes get likes
 func GetLikes(p si.GetLikesParams) middleware.Responder {
 	repoUser := repositories.NewUserRepository()
+	repoUserImage := repositories.NewUserImageRepository()
 	repoUserLike := repositories.NewUserLikeRepository()
 	repoUserMatch := repositories.NewUserMatchRepository()
 	repoUserToken := repositories.NewUserTokenRepository()
@@ -70,6 +71,21 @@ func GetLikes(p si.GetLikesParams) middleware.Responder {
 			})
 	}
 
+	// Get images
+	var userIDs []int64
+	for _, user := range entUserLikes {
+		userIDs = append(userIDs, user.UserID)
+	}
+
+	entUserImages, err := repoUserImage.GetByUserIDs(userIDs)
+	if err != nil {
+		return si.NewGetLikesInternalServerError().WithPayload(
+			&si.GetLikesInternalServerErrorBody{
+				Code:    "500",
+				Message: "Internal Server Error",
+			})
+	}
+
 	// Converte UserLikes -> LikeUserResponses
 	var entLikeUserResponses entities.LikeUserResponses
 	for _, entUserLike := range entUserLikes {
@@ -86,8 +102,15 @@ func GetLikes(p si.GetLikesParams) middleware.Responder {
 			return si.NewGetUsersBadRequest().WithPayload(
 				&si.GetUsersBadRequestBody{
 					Code:    "500",
-					Message: "Bad Request: 'GetByUserID' failed: " + err.Error(),
+					Message: "Bad Request: 'GetByUserID' failed",
 				})
+		}
+
+		// Get image URI
+		for _, entUserImage := range entUserImages {
+			if entUser.ID == entUserImage.UserID {
+				entUser.ImageURI = entUserImage.Path
+			}
 		}
 		res.ApplyUser(*entUser)
 		entLikeUserResponses = append(entLikeUserResponses, res)
@@ -116,7 +139,7 @@ func PostLike(p si.PostLikeParams) middleware.Responder {
 	if entUserToken == nil {
 		return si.NewPostLikeUnauthorized().WithPayload(
 			&si.PostLikeUnauthorizedBody{
-				Code:    "500",
+				Code:    "401",
 				Message: "Unauthorized",
 			})
 	}
@@ -134,7 +157,7 @@ func PostLike(p si.PostLikeParams) middleware.Responder {
 		return si.NewPostLikeBadRequest().WithPayload(
 			&si.PostLikeBadRequestBody{
 				Code:    "400",
-				Message: "Bad Request: 'GetByUserID' (sender) failed: " + err.Error(),
+				Message: "Bad Request: 'GetByUserID' (sender) failed",
 			})
 	}
 
@@ -150,7 +173,7 @@ func PostLike(p si.PostLikeParams) middleware.Responder {
 		return si.NewPostLikeBadRequest().WithPayload(
 			&si.PostLikeBadRequestBody{
 				Code:    "400",
-				Message: "Bad Request: 'GetByUserID' (receiver) failed: " + err.Error(),
+				Message: "Bad Request: 'GetByUserID' (receiver) failed",
 			})
 	}
 
@@ -162,7 +185,7 @@ func PostLike(p si.PostLikeParams) middleware.Responder {
 		return si.NewPostLikeBadRequest().WithPayload(
 			&si.PostLikeBadRequestBody{
 				Code:    "400",
-				Message: "Bad Request: must not do 'like' for myself",
+				Message: "Bad Request: must not do 'like' for yourself",
 			})
 	}
 
@@ -191,15 +214,6 @@ func PostLike(p si.PostLikeParams) middleware.Responder {
 				Message: "Bad Request: already did 'like'",
 			})
 	}
-	// for _, exceptID := range exceptIDs {
-	// 	if recvID == exceptID {
-	// 		return si.NewPostLikeBadRequest().WithPayload(
-	// 			&si.PostLikeBadRequestBody{
-	// 				Code:    "404",
-	// 				Message: "Bad Request : Already did 'like'",
-	// 			})
-	// 	}
-	// }
 
 	// Apply parameters (for "like")
 	var entUserLike entities.UserLike

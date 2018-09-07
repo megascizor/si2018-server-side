@@ -10,6 +10,7 @@ import (
 // GetUsers get users list
 func GetUsers(p si.GetUsersParams) middleware.Responder {
 	repoUser := repositories.NewUserRepository()
+	repoUserImage := repositories.NewUserImageRepository()
 	repoUserLike := repositories.NewUserLikeRepository()
 	repoUserToken := repositories.NewUserTokenRepository()
 
@@ -58,7 +59,7 @@ func GetUsers(p si.GetUsersParams) middleware.Responder {
 		return si.NewGetUsersBadRequest().WithPayload(
 			&si.GetUsersBadRequestBody{
 				Code:    "400",
-				Message: "Bad Request: 'GetByUserID' failed: " + err.Error(),
+				Message: "Bad Request: 'GetByUserID' failed",
 			})
 	}
 
@@ -86,19 +87,46 @@ func GetUsers(p si.GetUsersParams) middleware.Responder {
 		return si.NewGetUsersBadRequest().WithPayload(
 			&si.GetUsersBadRequestBody{
 				Code:    "400",
-				Message: "Bad Request: 'GetBuToken' failed: " + err.Error(),
+				Message: "Bad Request: 'GetBuToken' failed",
+			})
+	}
+
+	// Get users' IDs
+	var userIDs []int64
+	for _, user := range users {
+		userIDs = append(userIDs, user.ID)
+	}
+
+	// Get image entities
+	entUserImages, err := repoUserImage.GetByUserIDs(userIDs)
+	if err != nil {
+		return si.NewGetUsersInternalServerError().WithPayload(
+			&si.GetUsersInternalServerErrorBody{
+				Code:    "500",
+				Message: "Internal Server Error",
 			})
 	}
 
 	var entUsers entities.Users
 	entUsers = entities.Users(users)
 	sEnt := entUsers.Build()
+
+	// Put image URI to user.image_URI
+	for _, u := range sEnt {
+		for _, entUserImage := range entUserImages {
+			if u.ID == entUserImage.UserID {
+				u.ImageURI = entUserImage.Path
+			}
+		}
+	}
+
 	return si.NewGetUsersOK().WithPayload(sEnt)
 }
 
 // GetProfileByUserID gets user profile
 func GetProfileByUserID(p si.GetProfileByUserIDParams) middleware.Responder {
 	repoUser := repositories.NewUserRepository()
+	repoUserImage := repositories.NewUserImageRepository()
 	repoUserToken := repositories.NewUserTokenRepository()
 
 	// Validation
@@ -120,7 +148,6 @@ func GetProfileByUserID(p si.GetProfileByUserIDParams) middleware.Responder {
 
 	// Get users (look and looked)
 	lookUser, err := repoUser.GetByUserID(entUserToken.UserID)
-	lookedUser, err := repoUser.GetByUserID(p.UserID)
 	if err != nil {
 		return si.NewGetProfileByUserIDInternalServerError().WithPayload(
 			&si.GetProfileByUserIDInternalServerErrorBody{
@@ -133,6 +160,15 @@ func GetProfileByUserID(p si.GetProfileByUserIDParams) middleware.Responder {
 			&si.GetProfileByUserIDNotFoundBody{
 				Code:    "404",
 				Message: "User Not Found",
+			})
+	}
+
+	lookedUser, err := repoUser.GetByUserID(p.UserID)
+	if err != nil {
+		return si.NewGetProfileByUserIDInternalServerError().WithPayload(
+			&si.GetProfileByUserIDInternalServerErrorBody{
+				Code:    "500",
+				Message: "Internal Server Error",
 			})
 	}
 	if lookedUser == nil {
@@ -153,13 +189,33 @@ func GetProfileByUserID(p si.GetProfileByUserIDParams) middleware.Responder {
 			})
 	}
 
+	// Get user image
+	entUserImage, err := repoUserImage.GetByUserID(lookedUser.ID)
+	if err != nil {
+		return si.NewGetProfileByUserIDInternalServerError().WithPayload(
+			&si.GetProfileByUserIDInternalServerErrorBody{
+				Code:    "500",
+				Message: "Internal Server Error",
+			})
+	}
+	if entUserImage == nil {
+		return si.NewGetProfileByUserIDBadRequest().WithPayload(
+			&si.GetProfileByUserIDBadRequestBody{
+				Code:    "400",
+				Message: "Bad Request: 'GetByUserID' failed",
+			})
+	}
+
 	sEnt := lookedUser.Build()
+	// Input image uri
+	sEnt.ImageURI = entUserImage.Path
 	return si.NewGetProfileByUserIDOK().WithPayload(&sEnt)
 }
 
 // PutProfile update user profile
 func PutProfile(p si.PutProfileParams) middleware.Responder {
 	repoUser := repositories.NewUserRepository()
+	repoUserImage := repositories.NewUserImageRepository()
 	repoUserToken := repositories.NewUserTokenRepository()
 
 	// Validation
@@ -171,7 +227,7 @@ func PutProfile(p si.PutProfileParams) middleware.Responder {
 				Message: "Internal Server Error",
 			})
 	}
-	if entUserToken == nil {
+	if entUserToken == nil || p.Params.Token == "" {
 		return si.NewPutProfileUnauthorized().WithPayload(
 			&si.PutProfileUnauthorizedBody{
 				Code:    "401",
@@ -192,7 +248,7 @@ func PutProfile(p si.PutProfileParams) middleware.Responder {
 		return si.NewPutProfileBadRequest().WithPayload(
 			&si.PutProfileBadRequestBody{
 				Code:    "400",
-				Message: "Bad Request: 'GetByUserID' failed: " + err.Error(),
+				Message: "Bad Request: 'GetByUserID' failed",
 			})
 	}
 	if p.UserID != entUserToken.UserID {
@@ -228,10 +284,29 @@ func PutProfile(p si.PutProfileParams) middleware.Responder {
 		return si.NewPutProfileBadRequest().WithPayload(
 			&si.PutProfileBadRequestBody{
 				Code:    "400",
-				Message: "Bad Request: 'GetByUserID' (after update) failed: " + err.Error(),
+				Message: "Bad Request: 'GetByUserID' (after update) failed",
+			})
+	}
+
+	// Get image URI
+	entUserImage, err := repoUserImage.GetByUserID(p.UserID)
+	if err != nil {
+		return si.NewPutProfileInternalServerError().WithPayload(
+			&si.PutProfileInternalServerErrorBody{
+				Code:    "500",
+				Message: "Internal Server Error",
+			})
+	}
+	if entUserImage == nil {
+		return si.NewGetProfileByUserIDBadRequest().WithPayload(
+			&si.GetProfileByUserIDBadRequestBody{
+				Code:    "400",
+				Message: "Bad Request: 'GetByUserID' failed",
 			})
 	}
 
 	sEnt := entUpdatedUser.Build()
+	// Input image uri
+	sEnt.ImageURI = entUserImage.Path
 	return si.NewPutProfileOK().WithPayload(&sEnt)
 }

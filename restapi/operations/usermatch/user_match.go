@@ -9,6 +9,7 @@ import (
 
 func GetMatches(p si.GetMatchesParams) middleware.Responder {
 	repoUser := repositories.NewUserRepository()
+	repoUserImage := repositories.NewUserImageRepository()
 	repoUserMatch := repositories.NewUserMatchRepository()
 	repoUserToken := repositories.NewUserTokenRepository()
 
@@ -54,6 +55,22 @@ func GetMatches(p si.GetMatchesParams) middleware.Responder {
 			})
 	}
 
+	// Get images
+	var userIDs []int64
+	for _, user := range entUserMatches {
+		userIDs = append(userIDs, user.UserID)
+	}
+
+	entUserImages, err := repoUserImage.GetByUserIDs(userIDs)
+	if err != nil {
+		return si.NewGetMatchesInternalServerError().WithPayload(
+			&si.GetMatchesInternalServerErrorBody{
+				Code:    "500",
+				Message: "Internal Server Error",
+			})
+	}
+
+	// Convert UserMatches -> MatchUserResponses
 	var entMatchUserResponses entities.MatchUserResponses
 	for _, entUserMatch := range entUserMatches {
 		var res entities.MatchUserResponse
@@ -77,8 +94,15 @@ func GetMatches(p si.GetMatchesParams) middleware.Responder {
 			return si.NewGetMatchesBadRequest().WithPayload(
 				&si.GetMatchesBadRequestBody{
 					Code:    "400",
-					Message: "Bad Request: 'GetByUserID' failed: " + err.Error(),
+					Message: "Bad Request: 'GetByUserID' failed",
 				})
+		}
+
+		// Input image URI
+		for _, entUserImage := range entUserImages {
+			if entUser.ID == entUserImage.UserID {
+				entUser.ImageURI = entUserImage.Path
+			}
 		}
 		res.ApplyUser(*entUser)
 		entMatchUserResponses = append(entMatchUserResponses, res)
