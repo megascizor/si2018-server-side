@@ -6,7 +6,7 @@ import (
 	si "github.com/eure/si2018-server-side/restapi/summerintern"
 	"github.com/eure/si2018-server-side/restapi/utils"
 	"github.com/go-openapi/runtime/middleware"
-	strfmt "github.com/go-openapi/strfmt"
+	// strfmt "github.com/go-openapi/strfmt"
 	"time"
 )
 
@@ -51,24 +51,25 @@ func PostMessage(p si.PostMessageParams) middleware.Responder {
 			})
 	}
 
-	recvUser, err := repoUser.GetByUserID(p.UserID)
-	if err != nil {
-		return si.NewPostMessageInternalServerError().WithPayload(
-			&si.PostMessageInternalServerErrorBody{
-				Code:    "500",
-				Message: "Internal Server Error",
-			})
-	}
-	if recvUser == nil {
-		return si.NewPostMessageBadRequest().WithPayload(
-			&si.PostMessageBadRequestBody{
-				Code:    "404",
-				Message: "Bad Request: 'GetByUserID' (receiver) failed" + err.Error(),
-			})
-	}
+	// recvUser, err := repoUser.GetByUserID(p.UserID)
+	// if err != nil {
+	// 	return si.NewPostMessageInternalServerError().WithPayload(
+	// 		&si.PostMessageInternalServerErrorBody{
+	// 			Code:    "500",
+	// 			Message: "Internal Server Error",
+	// 		})
+	// }
+	// if recvUser == nil {
+	// 	return si.NewPostMessageBadRequest().WithPayload(
+	// 		&si.PostMessageBadRequestBody{
+	// 			Code:    "404",
+	// 			Message: "Bad Request: 'GetByUserID' (receiver) failed" + err.Error(),
+	// 		})
+	// }
 
 	sendID := sendUser.ID
-	recvID := recvUser.ID
+	recvID := p.UserID
+	// recvID := recvUser.ID
 
 	// Check whether to match
 	matchedIDs, errMatch := repoUserMatch.FindAllByUserID(sendID)
@@ -93,8 +94,8 @@ func PostMessage(p si.PostMessageParams) middleware.Responder {
 	entMessage.UserID = sendID
 	entMessage.PartnerID = recvID
 	entMessage.Message = p.Params.Message
-	entMessage.CreatedAt = strfmt.DateTime(time.Now())
-	entMessage.UpdatedAt = strfmt.DateTime(time.Now())
+	// entMessage.CreatedAt = strfmt.DateTime(time.Now())
+	// entMessage.UpdatedAt = strfmt.DateTime(time.Now())
 
 	err = repoUserMessage.Create(entMessage)
 	if err != nil {
@@ -126,6 +127,16 @@ func GetMessages(p si.GetMessagesParams) middleware.Responder {
 				Code:    "400",
 				Message: "Bad Request: limit in query must be more than 1",
 			})
+	}
+	if (p.Oldest != nil) && (p.Latest != nil) {
+		// Latest
+		if time.Time(*p.Latest).Before(time.Time(*p.Oldest)) {
+			return si.NewGetMessagesBadRequest().WithPayload(
+				&si.GetMessagesBadRequestBody{
+					Code:    "400",
+					Message: "Bad Request: latest must be more than oldest",
+				})
+		}
 	}
 	/* Todo: Add validater for p.Latest and p.Oldest */
 
@@ -162,24 +173,25 @@ func GetMessages(p si.GetMessagesParams) middleware.Responder {
 			})
 	}
 
-	recvUser, err := repoUser.GetByUserID(p.UserID)
-	if err != nil {
-		return si.NewGetMessagesInternalServerError().WithPayload(
-			&si.GetMessagesInternalServerErrorBody{
-				Code:    "500",
-				Message: "Internal Server Error",
-			})
-	}
-	if recvUser == nil {
-		return si.NewGetUsersBadRequest().WithPayload(
-			&si.GetUsersBadRequestBody{
-				Code:    "404",
-				Message: "Bad Request: 'GetByUserID' (receiver) failed: " + err.Error(),
-			})
-	}
+	// recvUser, err := repoUser.GetByUserID(p.UserID)
+	// if err != nil {
+	// 	return si.NewGetMessagesInternalServerError().WithPayload(
+	// 		&si.GetMessagesInternalServerErrorBody{
+	// 			Code:    "500",
+	// 			Message: "Internal Server Error",
+	// 		})
+	// }
+	// if recvUser == nil {
+	// 	return si.NewGetUsersBadRequest().WithPayload(
+	// 		&si.GetUsersBadRequestBody{
+	// 			Code:    "404",
+	// 			Message: "Bad Request: 'GetByUserID' (receiver) failed: " + err.Error(),
+	// 		})
+	// }
 
 	sendID := sendUser.ID
-	recvID := recvUser.ID
+	recvID := p.UserID
+	// recvID := recvUser.ID
 
 	// Check whether to match
 	matchedIDs, err := repoUserMatch.FindAllByUserID(sendID)
