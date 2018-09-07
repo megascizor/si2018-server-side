@@ -6,7 +6,7 @@ import (
 	si "github.com/eure/si2018-server-side/restapi/summerintern"
 	"github.com/eure/si2018-server-side/restapi/utils"
 	"github.com/go-openapi/runtime/middleware"
-	// strfmt "github.com/go-openapi/strfmt"
+	strfmt "github.com/go-openapi/strfmt"
 	"time"
 )
 
@@ -33,6 +33,14 @@ func PostMessage(p si.PostMessageParams) middleware.Responder {
 				Message: "Unauthorized",
 			})
 	}
+	// Check whether message is empty
+	if p.Params.Message == "" {
+		return si.NewPostMessageBadRequest().WithPayload(
+			&si.PostMessageBadRequestBody{
+				Code:    "400",
+				Message: "Bad Request: message is empty",
+			})
+	}
 
 	// Get users (sender, receiver)
 	sendUser, err := repoUser.GetByUserID(entUserToken.UserID)
@@ -47,33 +55,16 @@ func PostMessage(p si.PostMessageParams) middleware.Responder {
 		return si.NewPostMessageBadRequest().WithPayload(
 			&si.PostMessageBadRequestBody{
 				Code:    "404",
-				Message: "Bad Request: 'GetByUserID' (sender) failed: " + err.Error(),
+				Message: "Bad Request: 'GetByUserID' (sender) failed",
 			})
 	}
 
-	// recvUser, err := repoUser.GetByUserID(p.UserID)
-	// if err != nil {
-	// 	return si.NewPostMessageInternalServerError().WithPayload(
-	// 		&si.PostMessageInternalServerErrorBody{
-	// 			Code:    "500",
-	// 			Message: "Internal Server Error",
-	// 		})
-	// }
-	// if recvUser == nil {
-	// 	return si.NewPostMessageBadRequest().WithPayload(
-	// 		&si.PostMessageBadRequestBody{
-	// 			Code:    "404",
-	// 			Message: "Bad Request: 'GetByUserID' (receiver) failed" + err.Error(),
-	// 		})
-	// }
-
 	sendID := sendUser.ID
 	recvID := p.UserID
-	// recvID := recvUser.ID
 
 	// Check whether to match
-	matchedIDs, errMatch := repoUserMatch.FindAllByUserID(sendID)
-	if errMatch != nil {
+	matchedIDs, err := repoUserMatch.FindAllByUserID(sendID)
+	if err != nil {
 		return si.NewPostMessageInternalServerError().WithPayload(
 			&si.PostMessageInternalServerErrorBody{
 				Code:    "500",
@@ -94,8 +85,8 @@ func PostMessage(p si.PostMessageParams) middleware.Responder {
 	entMessage.UserID = sendID
 	entMessage.PartnerID = recvID
 	entMessage.Message = p.Params.Message
-	// entMessage.CreatedAt = strfmt.DateTime(time.Now())
-	// entMessage.UpdatedAt = strfmt.DateTime(time.Now())
+	entMessage.CreatedAt = strfmt.DateTime(time.Now())
+	entMessage.UpdatedAt = entMessage.CreatedAt
 
 	err = repoUserMessage.Create(entMessage)
 	if err != nil {
@@ -130,7 +121,7 @@ func GetMessages(p si.GetMessagesParams) middleware.Responder {
 	}
 	if (p.Oldest != nil) && (p.Latest != nil) {
 		// Latest
-		if time.Time(*p.Latest).Before(time.Time(*p.Oldest)) {
+		if time.Time(*p.Oldest).After(time.Time(*p.Latest)) {
 			return si.NewGetMessagesBadRequest().WithPayload(
 				&si.GetMessagesBadRequestBody{
 					Code:    "400",
@@ -169,29 +160,12 @@ func GetMessages(p si.GetMessagesParams) middleware.Responder {
 		return si.NewGetMessagesBadRequest().WithPayload(
 			&si.GetMessagesBadRequestBody{
 				Code:    "404",
-				Message: "Bad Request: 'GetByUserID' (sender) failed: " + err.Error(),
+				Message: "Bad Request: 'GetByUserID' (sender) failed",
 			})
 	}
 
-	// recvUser, err := repoUser.GetByUserID(p.UserID)
-	// if err != nil {
-	// 	return si.NewGetMessagesInternalServerError().WithPayload(
-	// 		&si.GetMessagesInternalServerErrorBody{
-	// 			Code:    "500",
-	// 			Message: "Internal Server Error",
-	// 		})
-	// }
-	// if recvUser == nil {
-	// 	return si.NewGetUsersBadRequest().WithPayload(
-	// 		&si.GetUsersBadRequestBody{
-	// 			Code:    "404",
-	// 			Message: "Bad Request: 'GetByUserID' (receiver) failed: " + err.Error(),
-	// 		})
-	// }
-
 	sendID := sendUser.ID
 	recvID := p.UserID
-	// recvID := recvUser.ID
 
 	// Check whether to match
 	matchedIDs, err := repoUserMatch.FindAllByUserID(sendID)
@@ -221,9 +195,6 @@ func GetMessages(p si.GetMessagesParams) middleware.Responder {
 				Message: "Internal Server Error",
 			})
 	}
-	// for _, message := range messages {
-	// 	entMessages = append(entMessages, message)
-	// }
 
 	sEnt := entMessages.Build()
 	return si.NewGetMessagesOK().WithPayload(sEnt)
